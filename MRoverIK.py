@@ -99,8 +99,10 @@ class OutputAnglesOperator(bpy.types.Operator):
         cd = cd_bone.tail - cd_bone.head
         de = de_bone.tail - de_bone.head
         end = end_bone.tail - end_bone.head
-        total = end_bone.tail - bc_bone.head
+        total_horiz = end_bone.tail - bc_bone.head
+        total_horiz.z = 0
         
+        """
         print("vertical: " + str(vertical))
         print("horizontal: " + str(horizontal))
         print("bc: " + str(bc))
@@ -108,6 +110,8 @@ class OutputAnglesOperator(bpy.types.Operator):
         print("de: " + str(de))
         print("end: " + str(end))
         print("total: " + str(total))
+        
+        """
         
         ts = time.time()
         st = datetime.datetime.fromtimestamp(ts).strftime('%Y-%m-%d %H:%M:%S')
@@ -117,7 +121,7 @@ class OutputAnglesOperator(bpy.types.Operator):
         print(st)
         print()
         
-        print("A: " + str(degrees(horizontal.angle(total))))
+        print("A: " + str(degrees(horizontal.angle(total_horiz))))
         print("B: " + str(degrees(vertical.angle(bc))))
         print("C: " + str(degrees(bc.angle(cd))))
         print("D: " + str(degrees(cd.angle(de))))
