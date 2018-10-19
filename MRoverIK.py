@@ -71,48 +71,43 @@ class MySettings(PropertyGroup):
 
 # ------------------------------------------------------------------------
 #    operators
+#    - every button requires an operator
+#    - an operator contains an execute function that runs on click
 # ------------------------------------------------------------------------
 
+# Functionality for the "Output Angles" Button
+# Prints the angles of the rig to the System Console
 class OutputAnglesOperator(bpy.types.Operator):
     bl_idname = "wm.output_angles"
     bl_label = "Output Angles"
 
     def execute(self, context):
-        scene = context.scene
-        mytool = scene.my_tool
 
-        #Get angles to send
+        #Get references to the armature objects, which contain bones
         arm = context.scene.objects['Arm']
         end_effector = context.scene.objects['End Effector']
         
+        #Get references to each bone
         bc_bone = arm.pose.bones["BC"]
         cd_bone = arm.pose.bones["CD"]
         de_bone = arm.pose.bones["DE"]
         end_bone = end_effector.pose.bones["End Effector"]
         
-        vertical = bc_bone.head - bc_bone.head #A zero vector that is the same type as the bone vectors
-        horizontal = bc_bone.head - bc_bone.head
-        vertical.z = 1
-        horizontal.x = 1
+        vertical = bc_bone.head - bc_bone.head #Create a zero vector (probably a better way)
+        horizontal = bc_bone.head - bc_bone.head #Create a zero vector (probably a better way
+        vertical.z = 1 #Used to determine angle of joint B
+        horizontal.x = 1 #Used to determine the angle of joint A
         
+        #Calculate all angles
         bc = bc_bone.tail - bc_bone.head
         cd = cd_bone.tail - cd_bone.head
         de = de_bone.tail - de_bone.head
         end = end_bone.tail - end_bone.head
-        total_horiz = end_bone.tail - bc_bone.head
+
+        total_horiz = end_bone.tail - bc_bone.head #Vector from the beginning to end of the arm
         total_horiz.z = 0
         
-        """
-        print("vertical: " + str(vertical))
-        print("horizontal: " + str(horizontal))
-        print("bc: " + str(bc))
-        print("cd: " + str(cd))
-        print("de: " + str(de))
-        print("end: " + str(end))
-        print("total: " + str(total))
-        
-        """
-        
+        # Create a timestamp to print
         ts = time.time()
         st = datetime.datetime.fromtimestamp(ts).strftime('%Y-%m-%d %H:%M:%S')
         
@@ -127,10 +122,9 @@ class OutputAnglesOperator(bpy.types.Operator):
         print("D: " + str(degrees(cd.angle(de))))
         print("E: " + str(degrees(de.angle(end))))        
         
-        #TODO output all the joint angles
-
         return {'FINISHED'}
-    
+
+# TODO Operator for changing lengths of arm bones
 class UpdateLengthsOperator(bpy.types.Operator):
     bl_idname = "wm.update_lengths"
     bl_label = "Update Lengths"
@@ -143,10 +137,13 @@ class UpdateLengthsOperator(bpy.types.Operator):
         arm = context.scene.objects['Arm']
         end = context.scene.objects['End Effector']
         
-        end.data.bones[0].length = end_effector_length.value
-        arm.data.bones['DE'].length = de_length
-        arm.data.bones['CD'].length = cd_length
-        arm.data.bones['BC'].length = bc_length
+        """
+        end.data.bones[0].length = 
+        arm.data.bones['DE'].length = 
+        arm.data.bones['CD'].length = 
+        arm.data.bones['BC'].length =
+
+        """ 
 
         return {'FINISHED'}
 
@@ -154,19 +151,21 @@ class UpdateLengthsOperator(bpy.types.Operator):
 #    menus
 # ------------------------------------------------------------------------
 
-    #blank because we don't have any menus in our tool
+    # blank because we don't have any menus in our tool
 
 # ------------------------------------------------------------------------
-#    my tool in posemode
+#    Panel in Pose Mode
 # ------------------------------------------------------------------------
 
 class OBJECT_PT_my_panel(Panel):
+
+    # Configuration for our tool
     bl_idname = "OBJECT_PT_my_panel"
     bl_label = "MRover Arm IK"
     bl_space_type = "VIEW_3D"   
     bl_region_type = "TOOLS"    
     bl_category = "MRover"
-    bl_context = "posemode"   
+    bl_context = "posemode"
 
     @classmethod
     def poll(self,context):
@@ -177,6 +176,7 @@ class OBJECT_PT_my_panel(Panel):
         scene = context.scene
         mytool = scene.my_tool
 
+        # Add the properties and buttons to our layout
         layout.prop(mytool, "bc_length")
         layout.prop(mytool, "cd_length")
         layout.prop(mytool, "de_length")
@@ -187,6 +187,7 @@ class OBJECT_PT_my_panel(Panel):
 
 # ------------------------------------------------------------------------
 # register and unregister
+# - Necessary for our tool to be an "add-on"
 # ------------------------------------------------------------------------
 
 def register():
