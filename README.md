@@ -16,6 +16,8 @@ Check the box for MRover
 
 ![](https://raw.githubusercontent.com/wolfm/MRover-Inverse-Kinematics/master/images/install_addon_2.png)
 
+If you want the Add-on to be enabled every time you start Blender, Click *Save User Settings* in the bottom left
+
 
 ## Using the Blender Add-on
 
