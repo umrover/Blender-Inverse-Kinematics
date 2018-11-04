@@ -30,7 +30,7 @@ from math import degrees
 
 import time
 import datetime
-
+import socket
 # ------------------------------------------------------------------------
 #    store properties in the active scene
 # ------------------------------------------------------------------------
@@ -77,11 +77,15 @@ class MySettings(PropertyGroup):
 
 # Functionality for the "Output Angles" Button
 # Prints the angles of the rig to the System Console
+sock = None
+
 class OutputAnglesOperator(bpy.types.Operator):
+    global sock
     bl_idname = "wm.output_angles"
     bl_label = "Output Angles"
 
     def execute(self, context):
+        global sock
 
         #Get references to the armature objects, which contain bones
         arm = context.scene.objects['Arm']
@@ -110,6 +114,27 @@ class OutputAnglesOperator(bpy.types.Operator):
         # Create a timestamp to print
         ts = time.time()
         st = datetime.datetime.fromtimestamp(ts).strftime('%Y-%m-%d %H:%M:%S')
+
+
+        if sock == None:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            print("Connecting...")
+            sock.connect(('127.0.0.1', 8019))
+            print("Connected!")
+
+        try:
+            data = {
+                'A': degrees(horizontal.angle(total_horiz)),
+                'B': degrees(vertical.angle(bc)),
+                'C': degrees(bc.angle(cd)),
+                'D': degrees(cd.angle(de)),
+                'E': degrees(de.angle(end))
+            }
+            sock.send(str(data).encode())
+            print("Sent!")
+        except socket.error as exc:
+            print(exc)
+            sock = None
         
         # print the values to the console
         print()
