@@ -78,6 +78,11 @@ class MySettings(PropertyGroup):
 # Functionality for the "Output Angles" Button
 # Prints the angles of the rig to the System Console
 sock = None
+joint_a_zero = 0.0
+joint_b_zero = 0.0
+joint_c_zero = 0.0
+joint_d_zero = 0.0
+joint_e_zero = 0.0
 
 class OutputAnglesOperator(bpy.types.Operator):
     global sock
@@ -124,11 +129,11 @@ class OutputAnglesOperator(bpy.types.Operator):
 
         try:
             data = {
-                'A': degrees(horizontal.angle(total_horiz)),
-                'B': degrees(vertical.angle(bc)),
-                'C': degrees(bc.angle(cd)),
-                'D': degrees(cd.angle(de)),
-                'E': degrees(de.angle(end))
+                'A': degrees(horizontal.angle(total_horiz)) - joint_a_zero,
+                'B': degrees(vertical.angle(bc)) - joint_b_zero,
+                'C': degrees(bc.angle(cd)) - joint_c_zero,
+                'D': degrees(cd.angle(de)) - joint_d_zero,
+                'E': degrees(de.angle(end)) - joint_e_zero
             }
             sock.send(str(data).encode())
             print("Sent!")
@@ -141,11 +146,11 @@ class OutputAnglesOperator(bpy.types.Operator):
         print(st)
         print()
         
-        print("A: " + str(degrees(horizontal.angle(total_horiz))))
-        print("B: " + str(degrees(vertical.angle(bc))))
-        print("C: " + str(degrees(bc.angle(cd))))
-        print("D: " + str(degrees(cd.angle(de))))
-        print("E: " + str(degrees(de.angle(end))))        
+        print("A: " + str(degrees(horizontal.angle(total_horiz)) - joint_a_zero))
+        print("B: " + str(degrees(vertical.angle(bc)) - joint_b_zero))
+        print("C: " + str(degrees(bc.angle(cd)) - joint_c_zero))
+        print("D: " + str(degrees(cd.angle(de)) - joint_d_zero))
+        print("E: " + str(degrees(de.angle(end)) - joint_e_zero))        
         
         return {'FINISHED'}
 
@@ -169,6 +174,49 @@ class UpdateLengthsOperator(bpy.types.Operator):
         arm.data.bones['BC'].length =
 
         """ 
+
+        return {'FINISHED'}
+
+# Sets the zero position for joints to the current position (allows for relative rotation)
+class SetZeroAngle(bpy.types.Operator):
+    bl_idname = "wm.set_zero_angle"
+    bl_label = "Set Zero Angles"
+
+    def execute(self, context):
+        global joint_a_zero
+        global joint_b_zero
+        global joint_c_zero
+        global joint_d_zero
+        global joint_e_zero
+        
+        arm = context.scene.objects['Arm']
+        end_effector = context.scene.objects['End Effector']
+        
+        #Get references to each bone
+        bc_bone = arm.pose.bones["BC"]
+        cd_bone = arm.pose.bones["CD"]
+        de_bone = arm.pose.bones["DE"]
+        end_bone = end_effector.pose.bones["End Effector"]
+        
+        vertical = bc_bone.head - bc_bone.head #Create a zero vector (probably a better way)
+        horizontal = bc_bone.head - bc_bone.head #Create a zero vector (probably a better way
+        vertical.z = 1 #Used to determine angle of joint B
+        horizontal.x = 1 #Used to determine the angle of joint A
+        
+        #Calculate all angles
+        bc = bc_bone.tail - bc_bone.head
+        cd = cd_bone.tail - cd_bone.head
+        de = de_bone.tail - de_bone.head
+        end = end_bone.tail - end_bone.head
+
+        total_horiz = end_bone.tail - bc_bone.head #Vector from the beginning to end of the arm
+        total_horiz.z = 0
+
+        joint_a_zero = degrees(horizontal.angle(total_horiz))
+        joint_b_zero = degrees(vertical.angle(bc))
+        joint_c_zero = degrees(bc.angle(cd))
+        joint_d_zero = degrees(cd.angle(de))
+        joint_e_zero = degrees(de.angle(end))
 
         return {'FINISHED'}
 
@@ -208,6 +256,7 @@ class OBJECT_PT_my_panel(Panel):
         layout.prop(mytool, "end_effector_length")
         layout.operator("wm.update_lengths")
         layout.operator("wm.output_angles")
+        layout.operator("wm.set_zero_angle")
 
 
 # ------------------------------------------------------------------------
