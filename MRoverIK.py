@@ -31,6 +31,8 @@ from math import degrees
 import time
 import datetime
 import socket
+import asyncio, threading
+import json
 # ------------------------------------------------------------------------
 #    store properties in the active scene
 # ------------------------------------------------------------------------
@@ -116,13 +118,16 @@ class OutputAnglesOperator(bpy.types.Operator):
         st = datetime.datetime.fromtimestamp(ts).strftime('%Y-%m-%d %H:%M:%S')
 
 
-        if sock == None:
-            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            print("Connecting...")
-            sock.connect(('127.0.0.1', 8019))
-            print("Connected!")
-
+        
+        
+        
+        
         try:
+            if sock == None:
+                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                print("Connecting...")
+                sock.connect(('127.0.0.1', 8019))
+                print("Connected!")
             data = {
                 'A': degrees(horizontal.angle(total_horiz)),
                 'B': degrees(vertical.angle(bc)),
@@ -130,7 +135,7 @@ class OutputAnglesOperator(bpy.types.Operator):
                 'D': degrees(cd.angle(de)),
                 'E': degrees(de.angle(end))
             }
-            sock.send(str(data).encode())
+            sock.sendall(json.dumps(data).encode())
             print("Sent!")
         except socket.error as exc:
             print(exc)
@@ -223,5 +228,22 @@ def unregister():
     bpy.utils.unregister_module(__name__)
     del bpy.types.Scene.my_tool
 
+def recv_commands():
+    mysock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    mysock.bind(("localhost", 6000))
+    mysock.listen(5)
+    while True:
+        conn, _ = mysock.accept()
+        data = conn.recv(1024)
+        print(data)
+        
+
+thread = threading.Thread(target=recv_commands)
+thread.start()
+
+
 if __name__ == "__main__":
     register()
+
+# loop = asyncio.get_event_loop()
+# loop.run_until_complete(recv_commands(), register())
