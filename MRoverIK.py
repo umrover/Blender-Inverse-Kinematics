@@ -84,7 +84,6 @@ joint_a_zero = 0.0
 joint_b_zero = 0.0
 joint_c_zero = 0.0
 joint_d_zero = 0.0
-joint_e_zero = 0.0
 
 class OutputAnglesOperator(bpy.types.Operator):
     global sock
@@ -92,71 +91,8 @@ class OutputAnglesOperator(bpy.types.Operator):
     bl_label = "Output Angles"
 
     def execute(self, context):
-        global sock
+        send_arm_data()
 
-        #Get references to the armature objects, which contain bones
-        arm = context.scene.objects['Arm']
-        end_effector = context.scene.objects['End Effector']
-        
-        #Get references to each bone
-        bc_bone = arm.pose.bones["BC"]
-        cd_bone = arm.pose.bones["CD"]
-        de_bone = arm.pose.bones["DE"]
-        end_bone = end_effector.pose.bones["End Effector"]
-        
-        vertical = bc_bone.head - bc_bone.head #Create a zero vector (probably a better way)
-        horizontal = bc_bone.head - bc_bone.head #Create a zero vector (probably a better way
-        vertical.z = 1 #Used to determine angle of joint B
-        horizontal.x = 1 #Used to determine the angle of joint A
-        
-        #Calculate all angles
-        bc = bc_bone.tail - bc_bone.head
-        cd = cd_bone.tail - cd_bone.head
-        de = de_bone.tail - de_bone.head
-        end = end_bone.tail - end_bone.head
-
-        total_horiz = end_bone.tail - bc_bone.head #Vector from the beginning to end of the arm
-        total_horiz.z = 0
-        
-        # Create a timestamp to print
-        ts = time.time()
-        st = datetime.datetime.fromtimestamp(ts).strftime('%Y-%m-%d %H:%M:%S')
-
-
-        
-        
-        
-        
-        try:
-            if sock == None:
-                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                print("Connecting...")
-                sock.connect(('127.0.0.1', 8019))
-                print("Connected!")
-            data = {
-                'A': degrees(horizontal.angle(total_horiz)) - joint_a_zero,
-                'B': degrees(vertical.angle(bc)) - joint_b_zero,
-                'C': degrees(bc.angle(cd)) - joint_c_zero,
-                'D': degrees(cd.angle(de)) - joint_d_zero,
-                'E': degrees(de.angle(end)) - joint_e_zero
-            }
-            sock.sendall(json.dumps(data).encode())
-            print("Sent!")
-        except socket.error as exc:
-            print(exc)
-            sock = None
-        
-        # print the values to the console
-        print()
-        print(st)
-        print()
-        
-        print("A: " + str(degrees(horizontal.angle(total_horiz)) - joint_a_zero))
-        print("B: " + str(degrees(vertical.angle(bc)) - joint_b_zero))
-        print("C: " + str(degrees(bc.angle(cd)) - joint_c_zero))
-        print("D: " + str(degrees(cd.angle(de)) - joint_d_zero))
-        print("E: " + str(degrees(de.angle(end)) - joint_e_zero))        
-        
         return {'FINISHED'}
 
 # TODO Operator for changing lengths of arm bones
@@ -192,7 +128,6 @@ class SetZeroAngle(bpy.types.Operator):
         global joint_b_zero
         global joint_c_zero
         global joint_d_zero
-        global joint_e_zero
         
         arm = context.scene.objects['Arm']
         end_effector = context.scene.objects['End Effector']
@@ -221,7 +156,6 @@ class SetZeroAngle(bpy.types.Operator):
         joint_b_zero = degrees(vertical.angle(bc))
         joint_c_zero = degrees(bc.angle(cd))
         joint_d_zero = degrees(cd.angle(de))
-        joint_e_zero = degrees(de.angle(end))
 
         return {'FINISHED'}
 
@@ -269,6 +203,66 @@ class OBJECT_PT_my_panel(Panel):
 # - Necessary for our tool to be an "add-on"
 # ------------------------------------------------------------------------
 
+def send_arm_data():
+    global sock
+
+    #Get references to the armature objects, which contain bones
+    arm = bpy.data.objects['Arm']
+    end_effector = bpy.data.objects['End Effector']
+    
+    #Get references to each bone
+    bc_bone = arm.pose.bones["BC"]
+    cd_bone = arm.pose.bones["CD"]
+    de_bone = arm.pose.bones["DE"]
+    end_bone = end_effector.pose.bones["End Effector"]
+    
+    vertical = bc_bone.head - bc_bone.head #Create a zero vector (probably a better way)
+    horizontal = bc_bone.head - bc_bone.head #Create a zero vector (probably a better way
+    vertical.z = 1 #Used to determine angle of joint B
+    horizontal.x = 1 #Used to determine the angle of joint A
+    
+    #Calculate all angles
+    bc = bc_bone.tail - bc_bone.head
+    cd = cd_bone.tail - cd_bone.head
+    de = de_bone.tail - de_bone.head
+    end = end_bone.tail - end_bone.head
+
+    total_horiz = end_bone.tail - bc_bone.head #Vector from the beginning to end of the arm
+    total_horiz.z = 0
+    
+    # Create a timestamp to print
+    ts = time.time()
+    st = datetime.datetime.fromtimestamp(ts).strftime('%Y-%m-%d %H:%M:%S')
+    
+    try:
+        if sock == None:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            print("Connecting...")
+            sock.connect(('127.0.0.1', 8019))
+            print("Connected!")
+        data = {
+            'A': degrees(horizontal.angle(total_horiz)) - joint_a_zero,
+            'B': degrees(vertical.angle(bc)) - joint_b_zero,
+            'C': degrees(bc.angle(cd)) - joint_c_zero,
+            'D': degrees(cd.angle(de)) - joint_d_zero,
+            'E': 0
+        }
+        sock.sendall(json.dumps(data).encode())
+        print("Sent!")
+    except socket.error as exc:
+        print(exc)
+        sock = None
+    
+    # print the values to the console
+    print()
+    print(st)
+    print()
+    
+    print("A: " + str(degrees(horizontal.angle(total_horiz)) - joint_a_zero))
+    print("B: " + str(degrees(vertical.angle(bc)) - joint_b_zero))
+    print("C: " + str(degrees(bc.angle(cd)) - joint_c_zero))
+    print("D: " + str(degrees(cd.angle(de)) - joint_d_zero))
+
 def register():
     bpy.utils.register_module(__name__)
     bpy.types.Scene.my_tool = PointerProperty(type=MySettings)
@@ -278,13 +272,24 @@ def unregister():
     del bpy.types.Scene.my_tool
 
 def recv_commands():
+    print("Starting Thread!")
     mysock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    mysock.bind(("localhost", 6000))
+    mysock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    mysock.bind(("localhost", 8018))
     mysock.listen(5)
+    arm_endpoint = bpy.data.objects['End Effector']
     while True:
         conn, _ = mysock.accept()
         data = conn.recv(1024)
-        print(data)
+        delta = json.loads(data.decode('utf8'))
+        print(delta)
+        arm_endpoint.location[0] += delta["deltaX"]
+        arm_endpoint.location[1] += delta["deltaY"]
+        arm_endpoint.location[2] += delta["deltaZ"]
+
+        if abs( delta["deltaX"] )>0 or abs( delta["deltaY"] )>0 or abs( delta["deltaZ"] )>0:
+            print("Sending!")
+            send_arm_data()
         
 
 thread = threading.Thread(target=recv_commands)
