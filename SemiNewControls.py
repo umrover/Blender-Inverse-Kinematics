@@ -26,49 +26,23 @@ from bpy.types import (Panel,
                        Operator,
                        PropertyGroup,
                        )
-from math import degrees
 
 import time
 import datetime
 import socket
 import asyncio, threading
 import json
+import math
 # ------------------------------------------------------------------------
 #    store properties in the active scene
 # ------------------------------------------------------------------------
-
 class MySettings(PropertyGroup):
-
-    bc_length = FloatProperty(
-        name = "BC Length",
-        description = "Length of the First Segment",
-        default = 1,
-        min = 0.01,
-        max = 30.0
-        )
-
-    cd_length = FloatProperty(
-        name = "CD Length",
-        description = "Length of the Second Segment",
-        default = 1,
-        min = 0.01,
-        max = 30.0
-        )
-
-    de_length = FloatProperty(
-        name = "DE Length",
-        description = "Length of the Third Segment",
-        default = 1,
-        min = 0.01,
-        max = 30.0
-        )
-
-    end_effector_length = FloatProperty(
-        name = "End Effector Length",
-        description = "Length of the End Effector",
-        default = 1,
-        min = 0.01,
-        max = 30.0
+    joint_e = FloatProperty(
+        name = "joint_e",
+        description = "Joint E Angle",
+        default = 0,
+        min = -math.pi/2,
+        max = math.pi/2
         )
 
 # ------------------------------------------------------------------------
@@ -84,6 +58,8 @@ joint_a_zero = 0.0
 joint_b_zero = 0.0
 joint_c_zero = 0.0
 joint_d_zero = 0.0
+lastMessageType = "IK"
+mysock = None
 
 class OutputAnglesOperator(bpy.types.Operator):
     global sock
@@ -105,7 +81,7 @@ class UpdateLengthsOperator(bpy.types.Operator):
         mytool = scene.my_tool
         
         #Set arm lengths based on the values in the menu
-        arm = context.scene.objects['Arm']
+        arm = context.scene.objects['New Arm']
         end = context.scene.objects['End Effector']
         
         """
@@ -129,33 +105,21 @@ class SetZeroAngle(bpy.types.Operator):
         global joint_c_zero
         global joint_d_zero
         
-        arm = context.scene.objects['Arm']
-        end_effector = context.scene.objects['End Effector']
+        arm = context.scene.objects['New Arm']
         
         #Get references to each bone
+        ab_bone = arm.pose.bones["AB"]
         bc_bone = arm.pose.bones["BC"]
         cd_bone = arm.pose.bones["CD"]
         de_bone = arm.pose.bones["DE"]
-        end_bone = end_effector.pose.bones["End Effector"]
-        
-        vertical = bc_bone.head - bc_bone.head #Create a zero vector (probably a better way)
-        horizontal = bc_bone.head - bc_bone.head #Create a zero vector (probably a better way
-        vertical.z = 1 #Used to determine angle of joint B
-        horizontal.x = 1 #Used to determine the angle of joint A
-        
-        #Calculate all angles
-        bc = bc_bone.tail - bc_bone.head
-        cd = cd_bone.tail - cd_bone.head
-        de = de_bone.tail - de_bone.head
-        end = end_bone.tail - end_bone.head
 
-        total_horiz = end_bone.tail - bc_bone.head #Vector from the beginning to end of the arm
-        total_horiz.z = 0
+        joint_a_zero = ab_bone.rotation_euler[1]
+        joint_b_zero = (ab_bone.matrix.inverted() * bc_bone.matrix).to_euler()[0]
+        joint_c_zero = (bc_bone.matrix.inverted() * cd_bone.matrix).to_euler()[0]
+        joint_d_zero = (cd_bone.matrix.inverted() * de_bone.matrix).to_euler()[0]
 
-        joint_a_zero = degrees(horizontal.angle(total_horiz))
-        joint_b_zero = degrees(vertical.angle(bc))
-        joint_c_zero = degrees(bc.angle(cd))
-        joint_d_zero = degrees(cd.angle(de))
+        print(joint_a_zero, joint_b_zero, joint_c_zero, joint_d_zero)
+        print()
 
         return {'FINISHED'}
 
@@ -189,10 +153,7 @@ class OBJECT_PT_my_panel(Panel):
         mytool = scene.my_tool
 
         # Add the properties and buttons to our layout
-        layout.prop(mytool, "bc_length")
-        layout.prop(mytool, "cd_length")
-        layout.prop(mytool, "de_length")
-        layout.prop(mytool, "end_effector_length")
+        layout.prop(mytool, "joint_e")
         layout.operator("wm.update_lengths")
         layout.operator("wm.output_angles")
         layout.operator("wm.set_zero_angle")
@@ -207,7 +168,7 @@ def send_arm_data():
     global sock
 
     #Get references to the armature objects, which contain bones
-    arm = bpy.data.objects['Arm']
+    arm = bpy.data.objects['New Arm']
     end_effector = bpy.data.objects['End Effector']
     
     #Get references to each bone
@@ -215,20 +176,7 @@ def send_arm_data():
     cd_bone = arm.pose.bones["CD"]
     de_bone = arm.pose.bones["DE"]
     end_bone = end_effector.pose.bones["End Effector"]
-    
-    vertical = bc_bone.head - bc_bone.head #Create a zero vector (probably a better way)
-    horizontal = bc_bone.head - bc_bone.head #Create a zero vector (probably a better way
-    vertical.z = 1 #Used to determine angle of joint B
-    horizontal.x = 1 #Used to determine the angle of joint A
-    
-    #Calculate all angles
-    bc = bc_bone.tail - bc_bone.head
-    cd = cd_bone.tail - cd_bone.head
-    de = de_bone.tail - de_bone.head
-    end = end_bone.tail - end_bone.head
 
-    total_horiz = end_bone.tail - bc_bone.head #Vector from the beginning to end of the arm
-    total_horiz.z = 0
     
     # Create a timestamp to print
     ts = time.time()
@@ -240,56 +188,135 @@ def send_arm_data():
             print("Connecting...")
             sock.connect(('127.0.0.1', 8019))
             print("Connected!")
+
         data = {
-            'A': degrees(horizontal.angle(total_horiz)) - joint_a_zero,
-            'B': degrees(vertical.angle(bc)) - joint_b_zero,
-            'C': degrees(bc.angle(cd)) - joint_c_zero,
-            'D': degrees(cd.angle(de)) - joint_d_zero,
+            'A': ab_bone.rotation_euler[1] - joint_a_zero,
+            'B': bc_bone.rotation_euler[0] - joint_b_zero,
+            'C': cd_bone.rotation_euler[0] - joint_c_zero,
+            'D': de_bone.rotation_euler[0] - joint_d_zero,
             'E': 0
         }
         sock.sendall(json.dumps(data).encode())
         print("Sent!")
+        print(data)
     except socket.error as exc:
         print(exc)
         sock = None
-    
-    # print the values to the console
-    print()
-    print(st)
-    print()
-    
-    print("A: " + str(degrees(horizontal.angle(total_horiz)) - joint_a_zero))
-    print("B: " + str(degrees(vertical.angle(bc)) - joint_b_zero))
-    print("C: " + str(degrees(bc.angle(cd)) - joint_c_zero))
-    print("D: " + str(degrees(cd.angle(de)) - joint_d_zero))
 
 def register():
     bpy.utils.register_module(__name__)
     bpy.types.Scene.my_tool = PointerProperty(type=MySettings)
+    bpy.app.handlers.scene_update_pre.append(updateAB)
 
 def unregister():
     bpy.utils.unregister_module(__name__)
     del bpy.types.Scene.my_tool
+    bpy.app.handlers.scene_update_pre.remove(updateAB)
+    mysock.close()
+
+skip = False
+
+def updateAB(self):
+    global skip
+    if skip:
+        return
+
+    if lastMessageType == 'IK':
+        arm = bpy.data.objects['New Arm']
+        ab_bone = arm.pose.bones["AB"]
+        arm_endpoint = bpy.data.objects['End Effector'].pose.bones["End Effector"]
+        vis_endpoint = bpy.data.objects['Visable Effector'].pose.bones["Visable Effector"]
+        ef_bone = arm.pose.bones["EF"]
+
+        thetaE = bpy.data.scenes["Scene"].my_tool.joint_e
+        # loc = arm.pose.bones["DE"].location
+        # x_0, y_0 = loc.x, loc.y
+
+        x_0, y_0 = -0.20532, 2.399
+        r = 1.0375
+
+
+        skip = True
+
+        armature = bpy.data.armatures['Armature']
+        prev_mode = arm.mode
+        prev_active = bpy.context.scene.objects.active
+        print("UPDATING")
+        bpy.context.scene.objects.active = arm
+        bpy.ops.object.mode_set(mode='EDIT')
+        try:
+            armature.edit_bones["EF"].tail = [x_0 - r*math.sin(thetaE), -0.161, y_0 + r*math.cos(thetaE)]
+            armature.edit_bones["EF"].roll = -thetaE
+        except KeyError:
+            print("ERROR")
+            pass
+        bpy.ops.object.mode_set(mode=prev_mode)
+        bpy.context.scene.objects.active = prev_active
+        skip = False
+
+        xPrime = x_0 - r*math.sin(thetaE)
+        yPrime = math.sqrt(arm_endpoint.head[0]**2 + arm_endpoint.head[1]**2 - xPrime**2)
+        theta_d = math.atan2(yPrime, xPrime)
+
+        theta_c = math.atan2(arm_endpoint.head[0], arm_endpoint.head[1])
+
+        # ef_bone.ik_min_z = ef_bone.ik_max_z = thetaE
+
+        # ef_bone.rotation_euler[2] = thetaE
+
+        ab_bone.rotation_euler[1] =  theta_d - theta_c + math.pi/2
 
 def recv_commands():
+    global lastMessageType
+    global mysock
+
     print("Starting Thread!")
     mysock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     mysock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     mysock.bind(("localhost", 8018))
     mysock.listen(5)
-    arm_endpoint = bpy.data.objects['End Effector']
+    arm = bpy.data.objects['New Arm']
+    arm_endpoint = bpy.data.objects['End Effector'].pose.bones["End Effector"]
+
+    ab_bone = arm.pose.bones["AB"]
+    bc_bone = arm.pose.bones["BC"]
+    cd_bone = arm.pose.bones["CD"]
+    de_bone = arm.pose.bones["DE"]
+    ef_bone = arm.pose.bones["EF"]
     while True:
         conn, _ = mysock.accept()
         data = conn.recv(1024)
-        delta = json.loads(data.decode('utf8'))
-        print(delta)
-        arm_endpoint.location[0] += delta["deltaX"]
-        arm_endpoint.location[1] += delta["deltaY"]
-        arm_endpoint.location[2] += delta["deltaZ"]
+        msg = json.loads(data.decode('utf8'))
+        print(msg)
+        # print(msg.type)
+        lastMessageType = msg['type']
+        if msg['type'] == "IK":
+            arm_endpoint.location[0] += msg["deltaX"]
+            arm_endpoint.location[1] += msg["deltaY"]
+            arm_endpoint.location[2] += msg["deltaZ"]
 
-        if abs( delta["deltaX"] )>0 or abs( delta["deltaY"] )>0 or abs( delta["deltaZ"] )>0:
-            print("Sending!")
-            send_arm_data()
+            # ab_bone.rotation_euler[1] = 0
+            bc_bone.rotation_euler[0] = 0
+            cd_bone.rotation_euler[0] = 0
+            de_bone.rotation_euler[0] = 0
+
+            ef_bone.constraints[0].mute = False
+
+            if abs( msg["deltaX"] )>0 or abs( msg["deltaY"] )>0 or abs( msg["deltaZ"] )>0:
+                send_arm_data()
+        elif msg['type'] == "FK":
+            ef_bone.constraints[0].mute = True
+            # end_effector = bpy.data.objects['End Effector']
+
+            ab_bone.rotation_euler[1] = joint_a_zero - math.radians(msg['joint_a'])
+            bc_bone.rotation_euler[0] = joint_b_zero -  math.radians(msg['joint_b'])  
+            cd_bone.rotation_euler[0] = joint_c_zero -  math.radians(msg['joint_c'])
+            de_bone.rotation_euler[0] = joint_d_zero -  math.radians(msg['joint_d'])
+
+            rawLoc = arm.location + de_bone.tail
+            arm_endpoint.location = [rawLoc.x, rawLoc.z, -rawLoc.y]
+            print(arm.location, de_bone.tail)
+
         
 
 thread = threading.Thread(target=recv_commands)
