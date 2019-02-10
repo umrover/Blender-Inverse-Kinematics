@@ -2,8 +2,8 @@ import socket
 
 sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 sock.connect(("localhost", 8018))
-# sock.send('{"type": "IK", "deltaX": 0.0, "deltaY": 0, "deltaZ": 0}'.encode())
-sock.send('{"type": "FK", "joint_a": 90, "joint_b": 0, "joint_c": 0, "joint_d": 0}'.encode())
+sock.send('{"type": "IK", "deltaX": 0.0, "deltaY": 0, "deltaZ": 0, "deltaTilt": 0, "deltaJointE": 0}'.encode())
+# sock.send('{"type": "FK", "joint_a": 1.57, "joint_b": -0.5, "joint_c": 0, "joint_d": 0, "joint_e": 0}'.encode())
 
 
 # sock.bind(('127.0.0.1', 8019))
